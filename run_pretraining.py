@@ -18,7 +18,7 @@ from model import optimization
 from pretrain import pretrain_data
 from pretrain import pretrain_helpers
 from util import training_utils
-from util import utils
+from util import utils, log_utils
 
 
 class PretrainingModel(object):
@@ -34,6 +34,8 @@ class PretrainingModel(object):
       self._bert_config.hidden_size = 144
       self._bert_config.intermediate_size = 144 * 4
       self._bert_config.num_attention_heads = 4
+
+    self.monitor_dict = {}
 
     # Mask the input
     masked_inputs = pretrain_helpers.mask(
@@ -90,6 +92,51 @@ class PretrainingModel(object):
           "sampled_tokids": tf.argmax(fake_data.sampled_tokens, -1,
                                       output_type=tf.int32)
       })
+
+    def monitor_fn(eval_fn_inputs, keys):
+      # d = {k: arg for k, arg in zip(eval_fn_keys, args)}
+      d = {}
+      for key in eval_fn_inputs:
+        if key in keys:
+          d[key] = eval_fn_inputs[key]
+      monitor_dict = dict()
+      masked_lm_ids = tf.reshape(d["masked_lm_ids"], [-1])
+      masked_lm_preds = tf.reshape(d["masked_lm_preds"], [-1])
+      masked_lm_weights = tf.reshape(d["masked_lm_weights"], [-1])
+      masked_lm_pred_ids = tf.argmax(masked_lm_preds, axis=-1, 
+                                  output_type=tf.int32)
+      mlm_acc = tf.cast(tf.equal(masked_lm_pred_ids, masked_lm_ids), dtype=tf.float32)
+      mlm_acc = tf.reduce_sum(mlm_acc*tf.cast(masked_lm_weights, dtype=tf.float32))
+      mlm_acc /= (1e-10+tf.reduce_sum(tf.cast(masked_lm_weights, dtype=tf.float32)))
+
+      mlm_loss = tf.reshape(d["mlm_loss"], [-1])
+      mlm_loss = tf.reduce_sum(mlm_loss*tf.cast(masked_lm_weights, dtype=tf.float32))
+      mlm_loss /= (1e-10+tf.reduce_sum(tf.cast(masked_lm_weights, dtype=tf.float32)))
+
+      monitor_dict['mlm_loss'] = mlm_loss
+      monitor_dict['mlm_acc'] = mlm_acc
+
+      sampled_lm_ids = tf.reshape(d["masked_lm_ids"], [-1])
+      sampled_lm_pred_ids = tf.reshape(d["sampled_tokids"], [-1])
+      sampeld_mlm_acc = tf.cast(tf.equal(sampled_lm_pred_ids, sampled_lm_ids), dtype=tf.float32)
+      sampeld_mlm_acc = tf.reduce_sum(mlm_acc*tf.cast(masked_lm_weights, dtype=tf.float32))
+      sampeld_mlm_acc /= (1e-10+tf.reduce_sum(tf.cast(masked_lm_weights, dtype=tf.float32)))
+
+      monitor_dict['sampeld_mlm_acc'] = sampeld_mlm_acc
+
+      token_pred_acc = tf.cast(tf.equal(d["disc_preds"], d['disc_labels']),
+                                dtype=tf.float32)
+      label_weights = tf.cast(d["input_mask"], dtype=tf.float32)
+      token_pred_acc = tf.reduce_sum(token_pred_acc*label_weights, axis=-1)
+      token_pred_acc /= tf.reduce_sum(label_weights, axis=-1)
+
+      monitor_dict['token_pred_acc'] = tf.reduce_mean(token_pred_acc)
+      monitor_dict['disc_loss'] = tf.reduce_mean(d['disc_loss'])
+
+      return monitor_dict
+
+    self.monitor_dict = monitor_fn(eval_fn_inputs, eval_fn_keys)
+
     eval_fn_keys = eval_fn_inputs.keys()
     eval_fn_values = [eval_fn_inputs[k] for k in eval_fn_keys]
 
@@ -265,6 +312,17 @@ def model_fn_builder(config):
       utils.log("Model size: %dK" % (n/1000))
     count_params()
     if mode == tf.estimator.ModeKeys.TRAIN:
+
+      if config.monitoring:
+        if model.monitor_dict:
+          host_call = log_utils.construct_scalar_host_call_v1(
+                                    monitor_dict=model.monitor_dict,
+                                    model_dir=config.model_dir,
+                                    prefix="train/")
+        else:
+          host_call = None
+        print("==host_call==", host_call)
+
       train_op = optimization.create_optimizer(
           model.total_loss, config.learning_rate, config.num_train_steps,
           weight_decay_rate=config.weight_decay_rate,
@@ -279,7 +337,8 @@ def model_fn_builder(config):
           training_hooks=[training_utils.ETAHook(
               {} if config.use_tpu else dict(loss=model.total_loss),
               config.num_train_steps, config.iterations_per_loop,
-              config.use_tpu,100)]
+              config.use_tpu,100)],
+          host_call=host_call if config.monitoring else None
       )
     elif mode == tf.estimator.ModeKeys.EVAL:
       output_spec = tf.estimator.tpu.TPUEstimatorSpec(

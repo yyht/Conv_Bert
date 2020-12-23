@@ -8,6 +8,7 @@ from __future__ import print_function
 
 import os
 import tensorflow as tf
+import random
 
 class PretrainingConfig(object):
   """Defines pre-training hyperparameters."""
@@ -29,6 +30,7 @@ class PretrainingConfig(object):
     self.lr_decay_power = 1.0  # linear weight decay by default
     self.weight_decay_rate = 0.01
     self.num_warmup_steps = 10000
+    self.monitoring = True
 
     # training settings
     self.iterations_per_loop = 200
