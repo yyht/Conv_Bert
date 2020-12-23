@@ -29,12 +29,6 @@ def get_input_fn(config, is_training,
     """The actual input function."""
     batch_size = params["batch_size"]
 
-    # name_to_features = {
-    #     "input_ids": tf.io.FixedLenFeature([config.max_seq_length], tf.int64),
-    #     "input_mask": tf.io.FixedLenFeature([config.max_seq_length], tf.int64),
-    #     "segment_ids": tf.io.FixedLenFeature([config.max_seq_length], tf.int64),
-    # }
-
     name_to_features = {
         "input_ori_ids": tf.io.FixedLenFeature([config.max_seq_length], tf.int64),
         # "input_mask": tf.io.FixedLenFeature([config.max_seq_length], tf.int64),
@@ -62,11 +56,12 @@ def get_input_fn(config, is_training,
     # and we *don"t* want to drop the remainder, otherwise we wont cover
     # every sample.
     d = d.apply(
-        tf.data.experimental.map_and_batch(
+        tf.contrib.data.map_and_batch(
             lambda record: _decode_record(record, name_to_features),
             batch_size=batch_size,
             num_parallel_batches=num_cpu_threads,
             drop_remainder=True))
+    d = d.apply(tf.data.experimental.ignore_errors())
     return d
 
   return input_fn
@@ -74,7 +69,8 @@ def get_input_fn(config, is_training,
 
 def _decode_record(record, name_to_features):
   """Decodes a record to a TensorFlow example."""
-  example = tf.io.parse_single_example(record, name_to_features)
+  # example = tf.io.parse_single_example(record, name_to_features)
+  example = tf.parse_single_example(record, name_to_features)
 
   # tf.Example only supports tf.int64, but the TPU only supports tf.int32.
   # So cast all int64 to int32.
