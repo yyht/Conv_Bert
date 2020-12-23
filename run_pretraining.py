@@ -311,6 +311,9 @@ def model_fn_builder(config):
       n = np.sum([np.prod(v.get_shape().as_list()) for v in tf.trainable_variables()])
       utils.log("Model size: %dK" % (n/1000))
     count_params()
+    tvars = tf.trainable_variables()
+    for tvar in tvars:
+      print(tvar, "========tvar========")
     if mode == tf.estimator.ModeKeys.TRAIN:
 
       if config.monitoring:
