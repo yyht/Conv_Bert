@@ -9,7 +9,8 @@ from __future__ import print_function
 import datetime
 import re
 import time
-import tensorflow.compat.v1 as tf
+# import tensorflow.compat.v1 as tf
+import tensorflow as tf
 
 from model import modeling
 from util import utils

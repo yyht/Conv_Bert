@@ -16,7 +16,8 @@ import re
 
 import numpy as np
 import six
-import tensorflow.compat.v1 as tf
+# import tensorflow.compat.v1 as tf
+import tensorflow as tf
 from tensorflow.contrib import layers as contrib_layers
 
 from tensorflow.python.eager import context

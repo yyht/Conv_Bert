@@ -10,7 +10,8 @@ import argparse
 import collections
 import json
 
-import tensorflow.compat.v1 as tf
+# import tensorflow.compat.v1 as tf
+import tensorflow as tf
 import numpy as np
 import configure_pretraining
 from model import modeling

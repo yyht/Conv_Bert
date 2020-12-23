@@ -9,7 +9,8 @@ from __future__ import print_function
 import collections
 import unicodedata
 import six
-import tensorflow.compat.v1 as tf
+# import tensorflow.compat.v1 as tf
+import tensorflow as tf
 
 
 
