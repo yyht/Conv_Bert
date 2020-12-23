@@ -135,9 +135,8 @@ class PretrainingModel(object):
 
       return monitor_dict
 
-    self.monitor_dict = monitor_fn(eval_fn_inputs, eval_fn_keys)
-
     eval_fn_keys = eval_fn_inputs.keys()
+    self.monitor_dict = monitor_fn(eval_fn_inputs, eval_fn_keys)
     eval_fn_values = [eval_fn_inputs[k] for k in eval_fn_keys]
 
     def metric_fn(*args):
