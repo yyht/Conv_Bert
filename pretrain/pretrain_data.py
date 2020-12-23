@@ -17,7 +17,7 @@ from model import tokenization
 from util import utils
 
 
-def get_input_fn(config: configure_pretraining.PretrainingConfig, is_training,
+def get_input_fn(config, is_training,
                  num_cpu_threads=4):
   """Creates an `input_fn` closure to be passed to TPUEstimator."""
 
@@ -29,9 +29,15 @@ def get_input_fn(config: configure_pretraining.PretrainingConfig, is_training,
     """The actual input function."""
     batch_size = params["batch_size"]
 
+    # name_to_features = {
+    #     "input_ids": tf.io.FixedLenFeature([config.max_seq_length], tf.int64),
+    #     "input_mask": tf.io.FixedLenFeature([config.max_seq_length], tf.int64),
+    #     "segment_ids": tf.io.FixedLenFeature([config.max_seq_length], tf.int64),
+    # }
+
     name_to_features = {
-        "input_ids": tf.io.FixedLenFeature([config.max_seq_length], tf.int64),
-        "input_mask": tf.io.FixedLenFeature([config.max_seq_length], tf.int64),
+        "input_ori_ids": tf.io.FixedLenFeature([config.max_seq_length], tf.int64),
+        # "input_mask": tf.io.FixedLenFeature([config.max_seq_length], tf.int64),
         "segment_ids": tf.io.FixedLenFeature([config.max_seq_length], tf.int64),
     }
 
@@ -77,6 +83,10 @@ def _decode_record(record, name_to_features):
     if t.dtype == tf.int64:
       t = tf.cast(t, tf.int32)
     example[name] = t
+  input_mask = tf.cast(tf.not_equal(example['input_ori_ids'], 
+                                    0), tf.int32)
+  example['input_mask'] = input_mask
+  example['input_ids'] = example['input_ori_ids']
 
   return example
 
@@ -117,7 +127,7 @@ CYAN = COLORS[5]
 GREEN = COLORS[1]
 
 
-def print_tokens(inputs: Inputs, inv_vocab, updates_mask=None):
+def print_tokens(inputs, inv_vocab, updates_mask=None):
   """Pretty-print model inputs."""
   pos_to_tokid = {}
   for tokid, pos, weight in zip(

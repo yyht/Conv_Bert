@@ -24,7 +24,7 @@ from util import utils
 class PretrainingModel(object):
   """Transformer pre-training using the replaced-token-detection task."""
 
-  def __init__(self, config: configure_pretraining.PretrainingConfig,
+  def __init__(self, config,
                features, is_training):
     # Set up model config
     self._config = config
@@ -126,7 +126,7 @@ class PretrainingModel(object):
       return metrics
     self.eval_metrics = (metric_fn, eval_fn_values)
 
-  def _get_masked_lm_output(self, inputs: pretrain_data.Inputs, model):
+  def _get_masked_lm_output(self, inputs, model):
     """Masked language modeling softmax layer."""
     masked_lm_weights = inputs.masked_lm_weights
     with tf.variable_scope("generator_predictions"):
@@ -221,7 +221,7 @@ class PretrainingModel(object):
     return FakedData(inputs=updated_inputs, is_fake_tokens=labels,
                      sampled_tokens=sampled_tokens)
 
-  def _build_transformer(self, inputs: pretrain_data.Inputs, is_training,
+  def _build_transformer(self, inputs, is_training,
                          bert_config=None, name="electra", reuse=False, **kwargs):
     """Build a transformer encoder network."""
     if bert_config is None:
@@ -238,8 +238,8 @@ class PretrainingModel(object):
           **kwargs)
 
 
-def get_generator_config(config: configure_pretraining.PretrainingConfig,
-                         bert_config: modeling.BertConfig):
+def get_generator_config(config,
+                         bert_config):
   """Get model config for the generator network."""
   gen_config = modeling.BertConfig.from_dict(bert_config.to_dict())
   gen_config.hidden_size = int(round(
@@ -252,7 +252,7 @@ def get_generator_config(config: configure_pretraining.PretrainingConfig,
   return gen_config
 
 
-def model_fn_builder(config: configure_pretraining.PretrainingConfig):
+def model_fn_builder(config):
   """Build the model for training."""
 
   def model_fn(features, labels, mode, params):
@@ -297,7 +297,7 @@ def model_fn_builder(config: configure_pretraining.PretrainingConfig):
   return model_fn
 
 
-def train_or_eval(config: configure_pretraining.PretrainingConfig):
+def train_or_eval(config):
   """Run pre-training or evaluate the pre-trained model."""
   if config.do_train == config.do_eval:
     raise ValueError("Exactly one of `do_train` or `do_eval` must be True.")
@@ -345,7 +345,7 @@ def train_or_eval(config: configure_pretraining.PretrainingConfig):
     return result
 
 
-def train_one_step(config: configure_pretraining.PretrainingConfig):
+def train_one_step(config):
   """Builds an ELECTRA/ConvBERT model an trains it for one step; useful for debugging."""
   train_input_fn = pretrain_data.get_input_fn(config, True)
   features = tf.data.make_one_shot_iterator(train_input_fn(dict(

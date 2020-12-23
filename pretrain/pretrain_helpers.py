@@ -102,7 +102,7 @@ def scatter_update(sequence, updates, positions):
   return updated_sequence, updates_mask
 
 
-def _get_candidates_mask(inputs: pretrain_data.Inputs, vocab,
+def _get_candidates_mask(inputs, vocab,
                          disallow_from_mask=None):
   """Returns a mask tensor of positions in the input that can be masked out."""
   ignore_ids = [vocab["[SEP]"], vocab["[CLS]"], vocab["[MASK]"]]
@@ -115,8 +115,8 @@ def _get_candidates_mask(inputs: pretrain_data.Inputs, vocab,
   return candidates_mask
 
 
-def mask(config: configure_pretraining.PretrainingConfig,
-         inputs: pretrain_data.Inputs, mask_prob, proposal_distribution=1.0,
+def mask(config,
+         inputs, mask_prob, proposal_distribution=1.0,
          disallow_from_mask=None, already_masked=None):
   """Implementation of dynamic masking. The optional arguments aren't needed for
   BERT/ELECTRA and are from early experiments in "strategically" masking out
@@ -187,7 +187,7 @@ def mask(config: configure_pretraining.PretrainingConfig,
   )
 
 
-def unmask(inputs: pretrain_data.Inputs):
+def unmask(inputs):
   unmasked_input_ids, _ = scatter_update(
       inputs.input_ids, inputs.masked_lm_ids, inputs.masked_lm_positions)
   return pretrain_data.get_updated_inputs(inputs, input_ids=unmasked_input_ids)
