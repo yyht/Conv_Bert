@@ -780,7 +780,9 @@ def attention_layer(from_tensor,
                     to_seq_length=None, 
                     conv_kernel_size=9,
                     head_ratio=2,
-                    conv_type=1):
+                    conv_type=1,
+                    from_tensor_mask=None,
+                    to_tensor_mask=None):
   """Performs several types of attention
   1) multi-headed attention from `from_tensor` to `to_tensor`.
 
@@ -928,6 +930,13 @@ def attention_layer(from_tensor,
     # [B,T, N*H]
     key_conv_attn_layer = reshape_for_conv(to_tensor_2d, batch_size, num_attention_heads*head_ratio,
                                     to_seq_length, size_per_head)
+
+    if from_tensor_mask is not None and to_tensor_mask is not None:
+      to_tensor_2d_mask = tf.cast(to_tensor_mask, tf.float32)[:, :, None]
+      from_tensor_2d_mask = tf.cast(from_tensor_mask, tf.float32)[:, :, None]
+      key_conv_attn_layer *= to_tensor_2d_mask
+      tf.logging.info("== apply conv seq-masking on sequence padding ==")
+
     key_conv_attn_layer = tf.layers.separable_conv1d(key_conv_attn_layer,
         num_attention_heads * size_per_head,
         conv_kernel_size,
@@ -936,6 +945,10 @@ def attention_layer(from_tensor,
         depthwise_initializer=create_initializer(1/conv_kernel_size),
         pointwise_initializer=create_initializer(initializer_range),
         name="conv_attn_key")
+
+    if from_tensor_mask is not None and to_tensor_mask is not None:
+      key_conv_attn_layer *= to_tensor_2d_mask
+      tf.logging.info("== apply conv seq-masking on sequence padding ==")
 
     # [B*T, N*H]
     key_conv_attn_layer = reshape_to_matrix(key_conv_attn_layer)
@@ -955,8 +968,6 @@ def attention_layer(from_tensor,
     
     conv_kernel_layer = tf.nn.softmax(conv_kernel_layer, axis=1)
     
-
-
     paddings = tf.constant([[0, 0,], [int((conv_kernel_size-1)/2), int((conv_kernel_size-1)/2)],[0,0]])
     
     conv_out_layer = tf.layers.dense(
@@ -967,6 +978,10 @@ def attention_layer(from_tensor,
         kernel_initializer=create_initializer(initializer_range))
     # [B,T, N*H]
     conv_out_layer = tf.reshape(conv_out_layer,[batch_size,to_seq_length,num_attention_heads * size_per_head])
+
+    if from_tensor_mask is not None and to_tensor_mask is not None:
+      conv_out_layer *= to_tensor_2d_mask
+      tf.logging.info("== apply conv seq-masking on sequence padding ==")
 
     conv_out_layer = tf.pad(conv_out_layer, paddings, "CONSTANT")
     # unfold [B,T, N*H, K]
