@@ -38,6 +38,8 @@ class PretrainingConfig(object):
     self.num_train_steps = 1000000
     self.num_eval_steps = 100
 
+    self.model_scope = 'electra'
+
     # model settings
     self.model_size = "base"  # one of "small", "medium-smal", or "base"
     # override the default transformer hparams for the provided model size; see
