@@ -360,6 +360,8 @@ def main():
   parser = argparse.ArgumentParser(description=__doc__)
   parser.add_argument("--data-dir", required=True,
                       help="Location of data files (model weights, etc).")
+  parser.add_argument("--data-file-list", required=True,
+                      help="Location of data files (model weights, etc).")
   parser.add_argument("--model-name", required=True,
                       help="The name of the model being fine-tuned.")
   parser.add_argument("--hparams", default="{}",
@@ -371,7 +373,7 @@ def main():
     hparams = json.loads(args.hparams)
   tf.logging.set_verbosity(tf.logging.ERROR)
   train_or_eval(configure_pretraining.PretrainingConfig(
-      args.model_name, args.data_dir, **hparams))
+      args.model_name, args.data_dir, args.data_file_list, **hparams))
 
 
 if __name__ == "__main__":

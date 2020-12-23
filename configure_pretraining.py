@@ -12,7 +12,7 @@ import os
 class PretrainingConfig(object):
   """Defines pre-training hyperparameters."""
 
-  def __init__(self, model_name, data_dir, **kwargs):
+  def __init__(self, model_name, data_dir, data_file_list, **kwargs):
     self.model_name = model_name
     self.debug = False  # debug mode
     self.do_train = True  # pre-train
