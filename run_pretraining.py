@@ -365,8 +365,10 @@ def train_or_eval(config):
     raise ValueError("Exactly one of `do_train` or `do_eval` must be True.")
   if config.debug:
     utils.rmkdir(config.model_dir)
-  utils.heading("Config:")
-  utils.log_config(config)
+  # utils.heading("Config:")
+  # utils.log_config(config)
+  tf.logging.info("Config:")
+  tf.logging.info(config)
 
   is_per_host = tf.estimator.tpu.InputPipelineConfig.PER_HOST_V2
   tpu_cluster_resolver = None
@@ -419,6 +421,7 @@ def train_one_step(config):
 
 
 def main():
+  tf.logging.set_verbosity(tf.logging.INFO)
   parser = argparse.ArgumentParser(description=__doc__)
   parser.add_argument("--data-dir", required=True,
                       help="Location of data files (model weights, etc).")
