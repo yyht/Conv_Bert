@@ -398,11 +398,13 @@ def train_or_eval(config):
       eval_batch_size=config.eval_batch_size)
 
   if config.do_train:
-    utils.heading("Running training")
+    # utils.heading("Running training")
+    tf.logging.info("Running training")
     estimator.train(input_fn=pretrain_data.get_input_fn(config, True),
                     max_steps=config.num_train_steps)
   if config.do_eval:
-    utils.heading("Running evaluation")
+    # utils.heading("Running evaluation")
+    tf.logging.info("Running evaluation")
     result = estimator.evaluate(
         input_fn=pretrain_data.get_input_fn(config, False),
         steps=config.num_eval_steps)
