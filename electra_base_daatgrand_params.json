@@ -1,6 +1,6 @@
 {
     "max_seq_length": 512,
-    "vocab_size": 21128,
+    "vocab_size": 30470,
     "model_size": "base",
     "train_batch_size":256,
     "embedding_size":768,
@@ -8,13 +8,12 @@
     "electra_objective":true,
     "monitoring":true,
     "model_scope":"electra",
-    "tpu_name":"albert0",
+    "tpu_name":"albert1",
     "use_tpu":true,
     "num_tpu_cores":8,
     "disc_weight":50.0,
     "num_train_steps":1000000,
     "learning_rate":1e-4,
-    "generator_hidden_size":0.5,
     "head_ratio": 2,
     "conv_kernel_size": 9,
     "conv_type": "sdconv"

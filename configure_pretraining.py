@@ -91,17 +91,17 @@ class PretrainingConfig(object):
     self.pretrain_file = os.path.join(data_dir, data_file_list)
     self.pretrain_tfrecords = []
     with tf.gfile.GFile(self.pretrain_file, "r") as reader:
-        for index, line in enumerate(reader):
-            content = line.strip()
-            if 'tfrecord' in content:
-                train_file_path = os.path.join(data_dir, content)
-                print(train_file_path, "====train_file_path====")
-                self.pretrain_tfrecords.append(train_file_path)
+      for index, line in enumerate(reader):
+        content = line.strip()
+        if 'tfrecord' in content:
+          train_file_path = os.path.join(data_dir, content)
+          print(train_file_path, "====train_file_path====")
+          self.pretrain_tfrecords.append(train_file_path)
     random.shuffle(self.pretrain_tfrecords)
     tf.logging.info("** total pretrain tfrecords:%s **"%(str(len(self.pretrain_tfrecords))))
     
     self.pretrain_tfrecords = ",".join(self.pretrain_tfrecords)
-    self.vocab_file = "./vocab/vocab_ch.txt"
+    self.vocab_file = "./vocab/vocab_cn_datagrand.txt"
     
     self.model_dir = os.path.join(data_dir, "models", model_name)
     results_dir = os.path.join(self.model_dir, "results")

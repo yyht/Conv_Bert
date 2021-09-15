@@ -8,8 +8,6 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-
-
 import collections
 import copy
 import json
@@ -18,200 +16,22 @@ import re
 
 import numpy as np
 import six
-# import tensorflow.compat.v1 as tf
 import tensorflow as tf
+
+def check_tf_version():
+  version = tf.__version__
+  print("==tf version==", version)
+  if int(version.split(".")[0]) >= 2 or int(version.split(".")[1]) >= 15:
+    return True
+  else:
+    return False
+if check_tf_version():
+  tf.disable_v2_behavior()
+
 from tensorflow.contrib import layers as contrib_layers
+from model import dropout_utils
 
-from tensorflow.python.eager import context
-from tensorflow.python.framework import dtypes
-from tensorflow.python.framework import tensor_shape
-from tensorflow.python.keras import activations
-from tensorflow.python.keras import backend as K
-from tensorflow.python.keras import constraints
-from tensorflow.python.keras import initializers
-from tensorflow.python.keras import regularizers
-from tensorflow.python.keras.engine.base_layer import Layer
-from tensorflow.python.keras.engine.input_spec import InputSpec
-from tensorflow.python.ops import gen_math_ops
-from tensorflow.python.ops import math_ops
-from tensorflow.python.ops import nn
-from tensorflow.python.ops import standard_ops
-from tensorflow.python.ops import init_ops
-
-from tensorflow.python.keras import layers as keras_layers
-from tensorflow.python.layers import base
-
-class GDense(keras_layers.Dense, base.Layer):
-  """Just your regular densely-connected NN layer with groups.
-  `GDense` implements the operation:
-  `output = activation(group dot(input, kernel) + bias)`
-  where `activation` is the element-wise activation function
-  passed as the `activation` argument, `kernel` is a weights matrix
-  created by the layer, and `bias` is a bias vector created by the layer
-  (only applicable if `use_bias` is `True`).
-  ```
-  Arguments:
-    units: Positive integer, dimensionality of the output space.
-    activation: Activation function to use.
-      If you don't specify anything, no activation is applied
-      (ie. "linear" activation: `a(x) = x`).
-    use_bias: Boolean, whether the layer uses a bias vector.
-    kernel_initializer: Initializer for the `kernel` weights matrix.
-    bias_initializer: Initializer for the bias vector.
-    kernel_regularizer: Regularizer function applied to
-      the `kernel` weights matrix.
-    bias_regularizer: Regularizer function applied to the bias vector.
-    activity_regularizer: Regularizer function applied to
-      the output of the layer (its "activation")..
-    kernel_constraint: Constraint function applied to
-      the `kernel` weights matrix.
-    bias_constraint: Constraint function applied to the bias vector.
-    group: Group number.
-  Input shape:
-    N-D tensor with shape: `(batch_size, ..., input_dim)`.
-    The most common situation would be
-    a 2D input with shape `(batch_size, input_dim)`.
-  Output shape:
-    N-D tensor with shape: `(batch_size, ..., units)`.
-    For instance, for a 2D input with shape `(batch_size, input_dim)`,
-    the output would have shape `(batch_size, units)`.
-  """
-  def __init__(self, units,
-               activation=None,
-               use_bias=True,
-               groups=1,
-               kernel_initializer=None,
-               bias_initializer=init_ops.zeros_initializer(),
-               kernel_regularizer=None,
-               bias_regularizer=None,
-               activity_regularizer=None,
-               kernel_constraint=None,
-               bias_constraint=None,
-               trainable=True,
-               name=None,
-               **kwargs):
-    super(GDense, self).__init__(units=units,
-                                activation=activation,
-                                use_bias=use_bias,
-                                kernel_initializer=kernel_initializer,
-                                bias_initializer=bias_initializer,
-                                kernel_regularizer=kernel_regularizer,
-                                bias_regularizer=bias_regularizer,
-                                activity_regularizer=activity_regularizer,
-                                kernel_constraint=kernel_constraint,
-                                bias_constraint=bias_constraint,
-                                trainable=trainable,
-                                name=name,**kwargs)
-    self.groups = int(groups)
-
-  def build(self, input_shape):
-    dtype = dtypes.as_dtype(self.dtype or K.floatx())
-    if not (dtype.is_floating or dtype.is_complex):
-      raise TypeError('Unable to build `GDense` layer with non-floating point '
-                      'dtype %s' % (dtype,))
-    input_shape = tensor_shape.TensorShape(input_shape)
-    if tensor_shape.dimension_value(input_shape[-1]) is None:
-      raise ValueError('The last dimension of the inputs to `Dense` '
-                       'should be defined. Found `None`.')
-    last_dim = tensor_shape.dimension_value(input_shape[-1])
-    self.input_spec = InputSpec(min_ndim=2,
-                                axes={-1: last_dim})
-    self.group_in_dim = int(last_dim/self.groups)
-    self.group_out_dim = int(self.units/self.groups)
-    self.kernel = self.add_weight(
-        'kernel',
-        shape=[ self.groups, self.group_in_dim, self.group_out_dim],
-        initializer=self.kernel_initializer,
-        regularizer=self.kernel_regularizer,
-        constraint=self.kernel_constraint,
-        dtype=self.dtype,
-        trainable=True)
-    if self.use_bias:
-      self.bias = self.add_weight(
-          'bias',
-          shape=[self.units,],
-          initializer=self.bias_initializer,
-          regularizer=self.bias_regularizer,
-          constraint=self.bias_constraint,
-          dtype=self.dtype,
-          trainable=True)
-    else:
-      self.bias = None
-    self.built = True
-
-  def call(self, inputs):
-    rank = len(inputs.shape)
-    if rank > 2:
-      raise ValueError(
-          'Not implemented for rank %s'
-          % rank)
-    else:
-      inputs = math_ops.cast(inputs, self._compute_dtype)
-      if K.is_sparse(inputs):
-        raise ValueError(
-            'Not implemented for sparse input')
-      else:
-        shape = inputs.shape.as_list()
-        grouped_input_shape = shape[:-1] + [self.groups, self.group_in_dim]
-        inputs = tf.transpose(tf.reshape(inputs, grouped_input_shape),[1,0,2])
-        outputs = tf.transpose(tf.matmul(inputs, self.kernel),[1,0,2])
-        output_shape = shape[:-1] + [self.units]
-        outputs = tf.reshape(outputs, output_shape)
- 
-    if self.use_bias:
-      outputs = nn.bias_add(outputs, self.bias)
-    if self.activation is not None:
-      return self.activation(outputs)
-    return outputs
-  def get_config(self):
-    config = {
-        'units': self.units,
-        'activation': activations.serialize(self.activation),
-        'use_bias': self.use_bias,
-        'groups': self.groups,
-        'kernel_initializer': initializers.serialize(self.kernel_initializer),
-        'bias_initializer': initializers.serialize(self.bias_initializer),
-        'kernel_regularizer': regularizers.serialize(self.kernel_regularizer),
-        'bias_regularizer': regularizers.serialize(self.bias_regularizer),
-        'activity_regularizer':
-            regularizers.serialize(self.activity_regularizer),
-        'kernel_constraint': constraints.serialize(self.kernel_constraint),
-        'bias_constraint': constraints.serialize(self.bias_constraint)
-    }
-    base_config = super(GDense, self).get_config()
-    return dict(list(base_config.items()) + list(config.items()))
-
-def gdense(inputs, units,
-    activation=None,
-    use_bias=True,
-    groups=1,
-    kernel_initializer=None,
-    bias_initializer=init_ops.zeros_initializer(),
-    kernel_regularizer=None,
-    bias_regularizer=None,
-    activity_regularizer=None,
-    kernel_constraint=None,
-    bias_constraint=None,
-    trainable=True,
-    name=None,
-    reuse=None):
-  layer = GDense(units,
-                activation=activation,
-                use_bias=use_bias,
-                groups = groups,
-                kernel_initializer=kernel_initializer,
-                bias_initializer=bias_initializer,
-                kernel_regularizer=kernel_regularizer,
-                bias_regularizer=bias_regularizer,
-                activity_regularizer=activity_regularizer,
-                kernel_constraint=kernel_constraint,
-                bias_constraint=bias_constraint,
-                trainable=trainable,
-                name=name,
-                _scope=name,
-                _reuse=reuse)
-  return layer.apply(inputs)
-
+stable_dropout = dropout_utils.ReuseDropout()
 
 class BertConfig(object):
   """Configuration for `BertModel` (ELECTRA uses the same model as BERT, 
@@ -229,7 +49,10 @@ class BertConfig(object):
                attention_probs_dropout_prob=0.1,
                max_position_embeddings=512,
                type_vocab_size=2,
-               initializer_range=0.02):
+               initializer_range=0.02,
+               conv_kernel_size=9,
+               head_ratio=2,
+               conv_type='sdconv'):
     """Constructs BertConfig.
 
     Args:
@@ -265,6 +88,9 @@ class BertConfig(object):
     self.max_position_embeddings = max_position_embeddings
     self.type_vocab_size = type_vocab_size
     self.initializer_range = initializer_range
+    self.conv_kernel_size = conv_kernel_size
+    self.head_ratio = head_ratio
+    self.conv_type = conv_type
 
   @classmethod
   def from_dict(cls, json_object):
@@ -324,12 +150,12 @@ class BertModel(object):
                input_mask=None,
                token_type_ids=None,
                use_one_hot_embeddings=True,
-               scope=None,
+               scope='bert',
                embedding_size=None,
                input_embeddings=None,
                input_reprs=None,
                update_embeddings=True,
-               untied_embeddings=False):
+               untied_embeddings=True):
     """Constructor for BertModel.
 
     Args:
@@ -396,7 +222,8 @@ class BertModel(object):
             position_embedding_name="position_embeddings",
             initializer_range=bert_config.initializer_range,
             max_position_embeddings=bert_config.max_position_embeddings,
-            dropout_prob=bert_config.hidden_dropout_prob)
+            dropout_prob=bert_config.hidden_dropout_prob,
+            dropout_name=tf.get_variable_scope().name+"/embeddings")
     else:
       self.embedding_output = input_reprs
     if not update_embeddings:
@@ -433,10 +260,12 @@ class BertModel(object):
             bert_config.attention_probs_dropout_prob,
             initializer_range=bert_config.initializer_range,
             do_return_all_layers=True,
-            linear_groups=bert_config.linear_groups,
             conv_kernel_size=bert_config.conv_kernel_size,
             head_ratio=bert_config.head_ratio,
-            conv_type=bert_config.conv_type)
+            conv_type=bert_config.conv_type,
+            from_tensor_mask=input_mask,
+            to_tensor_mask=input_mask,
+            dropout_name=tf.get_variable_scope().name+"/encoder")
         self.sequence_output = self.all_layer_outputs[-1]
         self.pooled_output = self.sequence_output[:, 0]
 
@@ -539,13 +368,15 @@ def get_assignment_map_from_checkpoint(tvars, init_checkpoint, prefix=""):
     (name, var) = (x[0], x[1])
     if prefix + name not in name_to_variable:
       continue
+    if var != name_to_variable[name].shape.as_list():
+      continue
     assignment_map[name] = prefix + name
     initialized_variable_names[name] = 1
     initialized_variable_names[name + ":0"] = 1
   return assignment_map, initialized_variable_names
 
 
-def dropout(input_tensor, dropout_prob):
+def dropout(input_tensor, dropout_prob, dropout_name=None):
   """Perform dropout.
 
   Args:
@@ -556,11 +387,20 @@ def dropout(input_tensor, dropout_prob):
   Returns:
     A version of `input_tensor` with dropout applied.
   """
+
   if dropout_prob is None or dropout_prob == 0.0:
     return input_tensor
-
-  output = tf.nn.dropout(input_tensor, 1.0 - dropout_prob)
+  if dropout_name:
+    output = stable_dropout.dropout(input_tensor, dropout_prob, dropout_name)
+  else:
+    output = tf.nn.dropout(input_tensor, 1.0 - dropout_prob)
   return output
+
+  # if dropout_prob is None or dropout_prob == 0.0:
+  #   return input_tensor
+
+  # output = tf.nn.dropout(input_tensor, 1.0 - dropout_prob)
+  # return output
 
 
 def layer_norm(input_tensor, name=None):
@@ -569,10 +409,10 @@ def layer_norm(input_tensor, name=None):
       inputs=input_tensor, begin_norm_axis=-1, begin_params_axis=-1, scope=name)
 
 
-def layer_norm_and_dropout(input_tensor, dropout_prob, name=None):
+def layer_norm_and_dropout(input_tensor, dropout_prob, name=None, dropout_name=None):
   """Runs layer normalization followed by dropout."""
   output_tensor = layer_norm(input_tensor, name)
-  output_tensor = dropout(output_tensor, dropout_prob)
+  output_tensor = dropout(output_tensor, dropout_prob, dropout_name=dropout_name)
   return output_tensor
 
 
@@ -647,7 +487,8 @@ def embedding_postprocessor(input_tensor,
                             position_embedding_name="position_embeddings",
                             initializer_range=0.02,
                             max_position_embeddings=512,
-                            dropout_prob=0.1):
+                            dropout_prob=0.1,
+                            dropout_name=None):
   """Performs various post-processing on a word embedding tensor.
 
   Args:
@@ -730,7 +571,7 @@ def embedding_postprocessor(input_tensor,
                                        position_broadcast_shape)
       output += position_embeddings
 
-  output = layer_norm_and_dropout(output, dropout_prob)
+  output = layer_norm_and_dropout(output, dropout_prob, dropout_name=dropout_name)
   return output
 
 
@@ -783,9 +624,10 @@ def attention_layer(from_tensor,
                     to_seq_length=None, 
                     conv_kernel_size=9,
                     head_ratio=2,
-                    conv_type=1,
+                    conv_type='sdconv',
                     from_tensor_mask=None,
-                    to_tensor_mask=None):
+                    to_tensor_mask=None,
+                    dropout_name=None):
   """Performs several types of attention
   1) multi-headed attention from `from_tensor` to `to_tensor`.
 
@@ -897,13 +739,12 @@ def attention_layer(from_tensor,
   from_tensor_2d = reshape_to_matrix(from_tensor)
   to_tensor_2d = reshape_to_matrix(to_tensor)
 
-
   new_num_attention_heads = int(num_attention_heads/head_ratio)
-  if new_num_attention_heads<1:
-    head_ratio=num_attention_heads
-    num_attention_heads=1
+  if new_num_attention_heads < 1:
+    head_ratio = num_attention_heads
+    num_attention_heads = 1
   else:
-    num_attention_heads=new_num_attention_heads
+    num_attention_heads = new_num_attention_heads
 
   # `query_layer` = [B*F, N*H]
   query_layer = tf.layers.dense(
@@ -934,12 +775,6 @@ def attention_layer(from_tensor,
     key_conv_attn_layer = reshape_for_conv(to_tensor_2d, batch_size, num_attention_heads*head_ratio,
                                     to_seq_length, size_per_head)
 
-    if from_tensor_mask is not None and to_tensor_mask is not None:
-      to_tensor_2d_mask = tf.cast(to_tensor_mask, tf.float32)[:, :, None]
-      from_tensor_2d_mask = tf.cast(from_tensor_mask, tf.float32)[:, :, None]
-      key_conv_attn_layer *= to_tensor_2d_mask
-      tf.logging.info("== apply conv seq-masking on sequence padding ==")
-
     key_conv_attn_layer = tf.layers.separable_conv1d(key_conv_attn_layer,
         num_attention_heads * size_per_head,
         conv_kernel_size,
@@ -948,10 +783,6 @@ def attention_layer(from_tensor,
         depthwise_initializer=create_initializer(1/conv_kernel_size),
         pointwise_initializer=create_initializer(initializer_range),
         name="conv_attn_key")
-
-    if from_tensor_mask is not None and to_tensor_mask is not None:
-      key_conv_attn_layer *= to_tensor_2d_mask
-      tf.logging.info("== apply conv seq-masking on sequence padding ==")
 
     # [B*T, N*H]
     key_conv_attn_layer = reshape_to_matrix(key_conv_attn_layer)
@@ -981,11 +812,6 @@ def attention_layer(from_tensor,
         kernel_initializer=create_initializer(initializer_range))
     # [B,T, N*H]
     conv_out_layer = tf.reshape(conv_out_layer,[batch_size,to_seq_length,num_attention_heads * size_per_head])
-
-    if from_tensor_mask is not None and to_tensor_mask is not None:
-      conv_out_layer *= to_tensor_2d_mask
-      tf.logging.info("== apply conv seq-masking on sequence padding ==")
-
     conv_out_layer = tf.pad(conv_out_layer, paddings, "CONSTANT")
     # unfold [B,T, N*H, K]
     unfold_conv_out_layer = tf.stack(
@@ -997,11 +823,9 @@ def attention_layer(from_tensor,
     conv_out_layer = tf.reshape(unfold_conv_out_layer,
       [batch_size*to_seq_length*num_attention_heads ,size_per_head, conv_kernel_size])
 
-
     conv_out_layer = tf.matmul(conv_out_layer, conv_kernel_layer)
 
     conv_out_layer = tf.reshape(conv_out_layer, [batch_size*to_seq_length, num_attention_heads*size_per_head])
-
 
   # `query_layer` = [B, N, F, H]
   query_layer = transpose_for_scores(query_layer, batch_size,
@@ -1038,13 +862,12 @@ def attention_layer(from_tensor,
 
   # This is actually dropping out entire tokens to attend to, which might
   # seem a bit unusual, but is taken from the original Transformer paper.
-  attention_probs = dropout(attention_probs, attention_probs_dropout_prob)
+  attention_probs = dropout(attention_probs, attention_probs_dropout_prob, dropout_name=dropout_name)
 
   # `value_layer` = [B, T, N, H]
   value_layer = tf.reshape(
       value_layer,
       [batch_size, to_seq_length, num_attention_heads, size_per_head])
-
 
   # `value_layer` = [B, N, T, H]
   value_layer = tf.transpose(value_layer, [0, 2, 1, 3])
@@ -1091,10 +914,12 @@ def transformer_model(input_tensor,
                       attention_probs_dropout_prob=0.1,
                       initializer_range=0.02,
                       do_return_all_layers=False,
-                      linear_groups=2,
                       conv_kernel_size=3,
                       head_ratio=2,
-                      conv_type="noconv"):
+                      conv_type="sdconv",
+                      from_tensor_mask=None,
+                      to_tensor_mask=None,
+                      dropout_name=None):
   """Extension of Multi-headed, multi-layer Transformer from "Attention is All You Need".
   
   Addition args are add for span-based dynamic convolution and ConvBERT.
@@ -1169,6 +994,12 @@ def transformer_model(input_tensor,
       with tf.variable_scope("attention"):
         attention_heads = []
         with tf.variable_scope("self"):
+
+          if dropout_name:
+            attention_dropout_name = tf.get_variable_scope().name
+          else:
+            attention_dropout_name = None
+
           attention_head, probs = attention_layer(
               from_tensor=prev_output,
               to_tensor=prev_output,
@@ -1183,7 +1014,10 @@ def transformer_model(input_tensor,
               to_seq_length=seq_length,
               conv_kernel_size=conv_kernel_size,
               head_ratio=head_ratio,
-              conv_type=conv_type)
+              conv_type=conv_type,
+              from_tensor_mask=from_tensor_mask,
+              to_tensor_mask=to_tensor_mask,
+              dropout_name=attention_dropout_name)
           attention_heads.append(attention_head)
           attn_maps.append(probs)
 
@@ -1203,39 +1037,35 @@ def transformer_model(input_tensor,
               hidden_size,
               kernel_initializer=create_initializer(initializer_range))
           
+          if dropout_name:
+            output_dropout_name = tf.get_variable_scope().name
+          else:
+            output_dropout_name = None
 
-          attention_output = dropout(attention_output, hidden_dropout_prob)
+          attention_output = dropout(attention_output, hidden_dropout_prob, dropout_name=output_dropout_name)
           attention_output = layer_norm(attention_output + prev_output)
 
       # The activation is only applied to the "intermediate" hidden layer.
       with tf.variable_scope("intermediate"):
-        if linear_groups==1:
-          intermediate_output = tf.layers.dense(
+        intermediate_output = tf.layers.dense(
               attention_output,
               intermediate_size,
               activation=intermediate_act_fn,
               kernel_initializer=create_initializer(initializer_range))
-        else:
-          intermediate_output = gdense(
-              attention_output,
-              intermediate_size,
-              groups=linear_groups,
-              activation=intermediate_act_fn,
-              kernel_initializer=create_initializer(initializer_range))
+        
       # Down-project back to `hidden_size` then add the residual.
       with tf.variable_scope("output"):
-        if linear_groups==1:
-          prev_output = tf.layers.dense(
+        prev_output = tf.layers.dense(
               intermediate_output,
               hidden_size,
               kernel_initializer=create_initializer(initializer_range))
+
+        if dropout_name:
+          ffn_dropout_name = tf.get_variable_scope().name
         else:
-          prev_output = gdense(
-              intermediate_output,
-              hidden_size,
-              groups=linear_groups,
-              kernel_initializer=create_initializer(initializer_range))
-        prev_output = dropout(prev_output, hidden_dropout_prob)
+          ffn_dropout_name = None
+        
+        prev_output = dropout(prev_output, hidden_dropout_prob, dropout_name=ffn_dropout_name)
         prev_output = layer_norm(prev_output + attention_output)
         all_layer_outputs.append(prev_output)
 
