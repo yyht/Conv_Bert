@@ -142,6 +142,14 @@ class PretrainingConfig(object):
       self.conv_kernel_size=9
       self.linear_groups=1
       self.head_ratio=2
+    elif self.model_size in ["large"]:
+      self.generator_hidden_size = 1/4
+      self.learning_rate = 1e-4
+      self.train_batch_size = 128
+      self.eval_batch_size = 128
+      self.conv_kernel_size=9
+      self.linear_groups=1
+      self.head_ratio=2
 
     # passed-in-arguments override (for example) debug-mode defaults
     self.update(kwargs)
