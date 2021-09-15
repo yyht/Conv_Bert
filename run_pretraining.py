@@ -445,7 +445,7 @@ def main():
   parser.add_argument("--model-name", required=True,
                       help="The name of the model being fine-tuned.")
   parser.add_argument("--hparams", default="{}",
-                      help="JSON dict of model hyperparameters.")
+                      help=" JSON dict of model hyperparameters.")
   args = parser.parse_args()
   if args.hparams.endswith(".json"):
     hparams = utils.load_json(args.hparams)
