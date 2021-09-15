@@ -337,10 +337,10 @@ def model_fn_builder(config):
           mode=mode,
           loss=model.total_loss,
           train_op=train_op,
-          training_hooks=[training_utils.ETAHook(
-              {} if config.use_tpu else dict(loss=model.total_loss),
-              config.num_train_steps, config.iterations_per_loop,
-              config.use_tpu,100)],
+          # training_hooks=[training_utils.ETAHook(
+          #     {} if config.use_tpu else dict(loss=model.total_loss),
+          #     config.num_train_steps, config.iterations_per_loop,
+          #     config.use_tpu,100)],
           host_call=host_call if config.monitoring else None
       )
     elif mode == tf.estimator.ModeKeys.EVAL:
