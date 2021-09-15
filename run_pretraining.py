@@ -12,6 +12,15 @@ import json
 
 # import tensorflow.compat.v1 as tf
 import tensorflow as tf
+def check_tf_version():
+  version = tf.__version__
+  print("==tf version==", version)
+  if int(version.split(".")[0]) >= 2 or int(version.split(".")[1]) >= 15:
+    return True
+  else:
+    return False
+if check_tf_version():
+  tf.disable_v2_behavior()
 import numpy as np
 import configure_pretraining
 from model import modeling_conv_bert
@@ -350,10 +359,11 @@ def model_fn_builder(config):
           mode=mode,
           loss=model.total_loss,
           eval_metrics=model.eval_metrics,
-          evaluation_hooks=[training_utils.ETAHook(
-              {} if config.use_tpu else dict(loss=model.total_loss),
-              config.num_eval_steps, config.iterations_per_loop,
-              config.use_tpu, is_training=False)])
+          # evaluation_hooks=[training_utils.ETAHook(
+          #     {} if config.use_tpu else dict(loss=model.total_loss),
+          #     config.num_eval_steps, config.iterations_per_loop,
+          #     config.use_tpu, is_training=False)]
+          )
     else:
       raise ValueError("Only TRAIN and EVAL modes are supported")
     return output_spec
