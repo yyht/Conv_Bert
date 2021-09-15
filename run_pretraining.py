@@ -306,10 +306,12 @@ def model_fn_builder(config):
     """Build the model for training."""
     model = PretrainingModel(config, features,
                              mode == tf.estimator.ModeKeys.TRAIN)
-    utils.log("Model is built!")
+    # utils.log("Model is built!")
+    tf.logging.info("Model is built!")
     def count_params():
       n = np.sum([np.prod(v.get_shape().as_list()) for v in tf.trainable_variables()])
-      utils.log("Model size: %dK" % (n/1000))
+      # utils.log("Model size: %dK" % (n/1000))
+      tf.logging.info("Model size: %dK" % (n/1000))
     count_params()
     tvars = tf.trainable_variables()
     for tvar in tvars:
@@ -405,7 +407,8 @@ def train_or_eval(config):
         input_fn=pretrain_data.get_input_fn(config, False),
         steps=config.num_eval_steps)
     for key in sorted(result.keys()):
-      utils.log("  {:} = {:}".format(key, str(result[key])))
+      # utils.log("  {:} = {:}".format(key, str(result[key])))
+      tf.logging.info("  {:} = {:}".format(key, str(result[key])))
     return result
 
 
