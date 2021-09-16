@@ -10,7 +10,7 @@
     "model_scope":"electra",
     "tpu_name":"albert2",
     "disc_mlm_weight": 1.0,
-    "disc_mlm": true,
+    "disc_mlm": false,
     "use_tpu":true,
     "num_tpu_cores":8,
     "disc_weight":50.0,
