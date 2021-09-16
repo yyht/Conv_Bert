@@ -195,13 +195,13 @@ class PretrainingModel(object):
     self.eval_metrics = (metric_fn, eval_fn_values)
 
   def _get_disc_masked_lm_output(self, inputs, model):
-    """Masked language modeling_conv_bert softmax layer."""
+    """Masked language modeling_electra softmax layer."""
     masked_lm_weights = inputs.masked_lm_weights
     with tf.variable_scope("cls/predictions"):
       if self._config.uniform_generator:
         logits = tf.zeros(self._bert_config.vocab_size)
         logits_tiled = tf.zeros(
-            modeling_conv_bert.get_shape_list(inputs.masked_lm_ids) +
+            modeling_electra.get_shape_list(inputs.masked_lm_ids) +
             [self._bert_config.vocab_size])
         logits_tiled += tf.reshape(logits, [1, 1, self._bert_config.vocab_size])
         logits = logits_tiled
@@ -210,11 +210,11 @@ class PretrainingModel(object):
             model.get_sequence_output(), inputs.masked_lm_positions)
         hidden = tf.layers.dense(
             relevant_hidden,
-            units=modeling_conv_bert.get_shape_list(model.get_embedding_table())[-1],
-            activation=modeling_conv_bert.get_activation(self._bert_config.hidden_act),
-            kernel_initializer=modeling_conv_bert.create_initializer(
+            units=modeling_electra.get_shape_list(model.get_embedding_table())[-1],
+            activation=modeling_electra.get_activation(self._bert_config.hidden_act),
+            kernel_initializer=modeling_electra.create_initializer(
                 self._bert_config.initializer_range))
-        hidden = modeling_conv_bert.layer_norm(hidden)
+        hidden = modeling_electra.layer_norm(hidden)
         output_bias = tf.get_variable(
             "output_bias",
             shape=[self._bert_config.vocab_size],
@@ -243,13 +243,13 @@ class PretrainingModel(object):
           loss=loss, preds=preds)
 
   def _get_masked_lm_output(self, inputs, model):
-    """Masked language modeling_conv_bert softmax layer."""
+    """Masked language modeling_electra softmax layer."""
     masked_lm_weights = inputs.masked_lm_weights
     with tf.variable_scope("generator_predictions"):
       if self._config.uniform_generator:
         logits = tf.zeros(self._bert_config.vocab_size)
         logits_tiled = tf.zeros(
-            modeling_conv_bert.get_shape_list(inputs.masked_lm_ids) +
+            modeling_electra.get_shape_list(inputs.masked_lm_ids) +
             [self._bert_config.vocab_size])
         logits_tiled += tf.reshape(logits, [1, 1, self._bert_config.vocab_size])
         logits = logits_tiled
@@ -258,11 +258,11 @@ class PretrainingModel(object):
             model.get_sequence_output(), inputs.masked_lm_positions)
         hidden = tf.layers.dense(
             relevant_hidden,
-            units=modeling_conv_bert.get_shape_list(model.get_embedding_table())[-1],
-            activation=modeling_conv_bert.get_activation(self._bert_config.hidden_act),
-            kernel_initializer=modeling_conv_bert.create_initializer(
+            units=modeling_electra.get_shape_list(model.get_embedding_table())[-1],
+            activation=modeling_electra.get_activation(self._bert_config.hidden_act),
+            kernel_initializer=modeling_electra.create_initializer(
                 self._bert_config.initializer_range))
-        hidden = modeling_conv_bert.layer_norm(hidden)
+        hidden = modeling_electra.layer_norm(hidden)
         output_bias = tf.get_variable(
             "output_bias",
             shape=[self._bert_config.vocab_size],
@@ -296,8 +296,8 @@ class PretrainingModel(object):
       hidden = tf.layers.dense(
           discriminator.get_sequence_output(),
           units=self._bert_config.hidden_size,
-          activation=modeling_conv_bert.get_activation(self._bert_config.hidden_act),
-          kernel_initializer=modeling_conv_bert.create_initializer(
+          activation=modeling_electra.get_activation(self._bert_config.hidden_act),
+          kernel_initializer=modeling_electra.create_initializer(
               self._bert_config.initializer_range))
       logits = tf.squeeze(tf.layers.dense(hidden, units=1), -1)
       weights = tf.cast(inputs.input_mask, tf.float32)
@@ -357,7 +357,7 @@ class PretrainingModel(object):
 def get_generator_config(config,
                          bert_config):
   """Get model config for the generator network."""
-  gen_config = modeling_conv_bert.BertConfig.from_dict(bert_config.to_dict())
+  gen_config = modeling_electra.BertConfig.from_dict(bert_config.to_dict())
   gen_config.hidden_size = int(round(
       bert_config.hidden_size * config.generator_hidden_size))
   gen_config.num_hidden_layers = int(round(
@@ -384,7 +384,7 @@ def model_fn_builder(config):
     count_params()
     tvars = tf.trainable_variables()
     for tvar in tvars:
-      print(tvar, "========tvar========")
+      tf.logging.info(tvar)
     if mode == tf.estimator.ModeKeys.TRAIN:
 
       if config.monitoring:
