@@ -364,7 +364,7 @@ def get_generator_config(config,
       bert_config.num_hidden_layers * config.generator_layers))
   gen_config.intermediate_size = 4 * gen_config.hidden_size
   # gen_config.num_attention_heads = max(1, gen_config.hidden_size // 64)
-  gen_config.num_attention_heads = max(1, gen_config.num_attention_heads * config.generator_hidden_size)
+  gen_config.num_attention_heads = int(max(1, gen_config.num_attention_heads * config.generator_hidden_size))
   return gen_config
 
 
