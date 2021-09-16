@@ -24,6 +24,7 @@ if check_tf_version():
 import numpy as np
 import configure_pretraining
 from model import modeling_conv_bert
+from model import modeling_electra
 from model import optimization
 from pretrain import pretrain_data
 from pretrain import pretrain_helpers
@@ -55,6 +56,10 @@ class PretrainingModel(object):
     embedding_size = (
         self._bert_config.hidden_size if config.embedding_size is None else
         config.embedding_size)
+    if config.disc_mlm:
+      tf.logging.info("** add disc mlm **")
+      config.untied_generator_embeddings = True
+
     if config.uniform_generator:
       mlm_output = self._get_masked_lm_output(masked_inputs, None)
     elif config.electra_objective and config.untied_generator:
@@ -82,6 +87,13 @@ class PretrainingModel(object):
           embedding_size=embedding_size)
       disc_output = self._get_discriminator_output(
           fake_data.inputs, discriminator, fake_data.is_fake_tokens)
+      
+      if config.disc_mlm:
+        tf.logging.info("** add disc mlm **")
+        disc_mlm_output = self._get_disc_masked_lm_output(fake_data.inputs,
+                                      discriminator)
+        self.total_loss += config.disc_mlm_weight * disc_mlm_output.loss
+
       self.total_loss += config.disc_weight * disc_output.loss
 
     # Evaluation
@@ -181,6 +193,54 @@ class PretrainingModel(object):
               weights=d["disc_labels"] * d["input_mask"])
       return metrics
     self.eval_metrics = (metric_fn, eval_fn_values)
+
+  def _get_disc_masked_lm_output(self, inputs, model):
+    """Masked language modeling_conv_bert softmax layer."""
+    masked_lm_weights = inputs.masked_lm_weights
+    with tf.variable_scope("cls/predictions"):
+      if self._config.uniform_generator:
+        logits = tf.zeros(self._bert_config.vocab_size)
+        logits_tiled = tf.zeros(
+            modeling_conv_bert.get_shape_list(inputs.masked_lm_ids) +
+            [self._bert_config.vocab_size])
+        logits_tiled += tf.reshape(logits, [1, 1, self._bert_config.vocab_size])
+        logits = logits_tiled
+      else:
+        relevant_hidden = pretrain_helpers.gather_positions(
+            model.get_sequence_output(), inputs.masked_lm_positions)
+        hidden = tf.layers.dense(
+            relevant_hidden,
+            units=modeling_conv_bert.get_shape_list(model.get_embedding_table())[-1],
+            activation=modeling_conv_bert.get_activation(self._bert_config.hidden_act),
+            kernel_initializer=modeling_conv_bert.create_initializer(
+                self._bert_config.initializer_range))
+        hidden = modeling_conv_bert.layer_norm(hidden)
+        output_bias = tf.get_variable(
+            "output_bias",
+            shape=[self._bert_config.vocab_size],
+            initializer=tf.zeros_initializer())
+        logits = tf.matmul(hidden, model.get_embedding_table(),
+                           transpose_b=True)
+        logits = tf.nn.bias_add(logits, output_bias)
+
+      oh_labels = tf.one_hot(
+          inputs.masked_lm_ids, depth=self._bert_config.vocab_size,
+          dtype=tf.float32)
+
+      probs = tf.nn.softmax(logits)
+      log_probs = tf.nn.log_softmax(logits)
+      label_log_probs = -tf.reduce_sum(log_probs * oh_labels, axis=-1)
+
+      numerator = tf.reduce_sum(inputs.masked_lm_weights * label_log_probs)
+      denominator = tf.reduce_sum(masked_lm_weights) + 1e-6
+      loss = numerator / denominator
+      preds = tf.argmax(log_probs, axis=-1, output_type=tf.int32)
+
+      MLMOutput = collections.namedtuple(
+          "MLMOutput", ["logits", "probs", "loss", "per_example_loss", "preds"])
+      return MLMOutput(
+          logits=logits, probs=probs, per_example_loss=label_log_probs,
+          loss=loss, preds=preds)
 
   def _get_masked_lm_output(self, inputs, model):
     """Masked language modeling_conv_bert softmax layer."""
@@ -283,7 +343,7 @@ class PretrainingModel(object):
     if bert_config is None:
       bert_config = self._bert_config
     with tf.variable_scope(tf.get_variable_scope(), reuse=reuse):
-      return modeling_conv_bert.BertModel(
+      return modeling_electra.BertModel(
           bert_config=bert_config,
           is_training=is_training,
           input_ids=inputs.input_ids,

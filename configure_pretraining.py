@@ -41,6 +41,9 @@ class PretrainingConfig(object):
     self.model_scope = 'electra'
 
     # model settings
+    self.disc_mlm_weight = 1.0
+    self.disc_mlm = False
+    self.model_type = 'electra'
     self.model_size = "base"  # one of "small", "medium-smal", or "base"
     # override the default transformer hparams for the provided model size; see
     # modeling.BertConfig for the possible hparams and util.training_utils for
