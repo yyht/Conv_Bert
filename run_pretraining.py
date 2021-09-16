@@ -90,6 +90,11 @@ class PretrainingModel(object):
       
       if config.disc_mlm:
         tf.logging.info("** add disc mlm **")
+        tf.logging.info("** fake data **")
+        tf.logging.info(fake_data)
+        tf.logging.info("** masked data **")
+        tf.logging.info(masked_inputs)
+
         disc_mlm_output = self._get_disc_masked_lm_output(fake_data.inputs,
                                       discriminator)
         self.total_loss += config.disc_mlm_weight * disc_mlm_output.loss
