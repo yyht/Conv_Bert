@@ -214,5 +214,5 @@ def sample_from_softmax(logits, disallow=None):
   uniform_noise = tf.random.uniform(
       modeling.get_shape_list(logits), minval=0, maxval=1)
   gumbel_noise = -tf.log(-tf.log(uniform_noise + 1e-9) + 1e-9)
-  return tf.one_hot(tf.argmax(tf.nn.softmax(logits + gumbel_noise), -1,
+  return tf.one_hot(tf.argmax(tf.nn.softmax((logits + gumbel_noise)/0.1), -1,
                               output_type=tf.int32), logits.shape[-1])
