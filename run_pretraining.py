@@ -131,10 +131,6 @@ class PretrainingModel(object):
       masked_lm_preds = tf.reshape(d["masked_lm_preds"], [-1])
       masked_lm_weights = tf.reshape(d["masked_lm_weights"], [-1])
 
-      sampled_masked_lm_ids = tf.reshape(d["sampled_masked_lm_ids"], [-1])
-      sampled_masked_lm_preds = tf.reshape(d["sampled_masked_lm_preds"], [-1])
-      sampled_masked_lm_weights = tf.reshape(d["sampled_masked_lm_weights"], [-1])
-
       mlm_acc = tf.cast(tf.equal(masked_lm_preds, masked_lm_ids), dtype=tf.float32)
       mlm_acc = tf.reduce_sum(mlm_acc*tf.cast(masked_lm_weights, dtype=tf.float32))
       mlm_acc /= (1e-10+tf.reduce_sum(tf.cast(masked_lm_weights, dtype=tf.float32)))
