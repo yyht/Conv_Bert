@@ -8,7 +8,7 @@
     "electra_objective":true,
     "monitoring":true,
     "model_scope":"electra",
-    "tpu_name":"albert2",
+    "tpu_name":"albert4",
     "use_tpu":true,
     "num_tpu_cores":8,
     "disc_weight":50.0,

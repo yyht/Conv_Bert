@@ -23,8 +23,8 @@ if check_tf_version():
   tf.disable_v2_behavior()
 import numpy as np
 import configure_pretraining
-from model import modeling_electra
-from model import modeling_electra
+from model import modeling_conv_bert
+from model import modeling_conv_bert
 from model import optimization
 from pretrain import pretrain_data
 from pretrain import pretrain_helpers
@@ -130,9 +130,12 @@ class PretrainingModel(object):
       masked_lm_ids = tf.reshape(d["masked_lm_ids"], [-1])
       masked_lm_preds = tf.reshape(d["masked_lm_preds"], [-1])
       masked_lm_weights = tf.reshape(d["masked_lm_weights"], [-1])
-      masked_lm_pred_ids = tf.argmax(masked_lm_preds, axis=-1, 
-                                  output_type=tf.int32)
-      mlm_acc = tf.cast(tf.equal(masked_lm_pred_ids, masked_lm_ids), dtype=tf.float32)
+
+      sampled_masked_lm_ids = tf.reshape(d["sampled_masked_lm_ids"], [-1])
+      sampled_masked_lm_preds = tf.reshape(d["sampled_masked_lm_preds"], [-1])
+      sampled_masked_lm_weights = tf.reshape(d["sampled_masked_lm_weights"], [-1])
+
+      mlm_acc = tf.cast(tf.equal(masked_lm_preds, masked_lm_ids), dtype=tf.float32)
       mlm_acc = tf.reduce_sum(mlm_acc*tf.cast(masked_lm_weights, dtype=tf.float32))
       mlm_acc /= (1e-10+tf.reduce_sum(tf.cast(masked_lm_weights, dtype=tf.float32)))
 
@@ -143,13 +146,12 @@ class PretrainingModel(object):
       monitor_dict['mlm_loss'] = mlm_loss
       monitor_dict['mlm_acc'] = mlm_acc
 
-      sampled_lm_ids = tf.reshape(d["masked_lm_ids"], [-1])
+      sampled_lm_ids = tf.reshape(d["sampled_masked_lm_ids"], [-1])
       sampled_lm_pred_ids = tf.reshape(d["sampled_tokids"], [-1])
       sampeld_mlm_acc = tf.cast(tf.equal(sampled_lm_pred_ids, sampled_lm_ids), dtype=tf.float32)
-      sampeld_mlm_acc = tf.reduce_sum(mlm_acc*tf.cast(masked_lm_weights, dtype=tf.float32))
-      sampeld_mlm_acc /= (1e-10+tf.reduce_sum(tf.cast(masked_lm_weights, dtype=tf.float32)))
-
-      monitor_dict['sampeld_mlm_acc'] = sampeld_mlm_acc
+      sampeld_mlm_acc = tf.reduce_sum(sampeld_mlm_acc*tf.cast(sampled_masked_lm_weights, dtype=tf.float32))
+      sampeld_mlm_acc /= (1e-10+tf.reduce_sum(tf.cast(sampled_masked_lm_weights, dtype=tf.float32)))
+      monitor_dict['sampled_mlm_acc'] = sampeld_mlm_acc
 
       token_pred_acc = tf.cast(tf.equal(d["disc_preds"], d['disc_labels']),
                                 dtype=tf.float32)
@@ -200,13 +202,13 @@ class PretrainingModel(object):
     self.eval_metrics = (metric_fn, eval_fn_values)
 
   def _get_disc_masked_lm_output(self, inputs, model):
-    """Masked language modeling_electra softmax layer."""
+    """Masked language modeling_conv_bert softmax layer."""
     masked_lm_weights = inputs.masked_lm_weights
     with tf.variable_scope("cls/predictions"):
       if self._config.uniform_generator:
         logits = tf.zeros(self._bert_config.vocab_size)
         logits_tiled = tf.zeros(
-            modeling_electra.get_shape_list(inputs.masked_lm_ids) +
+            modeling_conv_bert.get_shape_list(inputs.masked_lm_ids) +
             [self._bert_config.vocab_size])
         logits_tiled += tf.reshape(logits, [1, 1, self._bert_config.vocab_size])
         logits = logits_tiled
@@ -215,11 +217,11 @@ class PretrainingModel(object):
             model.get_sequence_output(), inputs.masked_lm_positions)
         hidden = tf.layers.dense(
             relevant_hidden,
-            units=modeling_electra.get_shape_list(model.get_embedding_table())[-1],
-            activation=modeling_electra.get_activation(self._bert_config.hidden_act),
-            kernel_initializer=modeling_electra.create_initializer(
+            units=modeling_conv_bert.get_shape_list(model.get_embedding_table())[-1],
+            activation=modeling_conv_bert.get_activation(self._bert_config.hidden_act),
+            kernel_initializer=modeling_conv_bert.create_initializer(
                 self._bert_config.initializer_range))
-        hidden = modeling_electra.layer_norm(hidden)
+        hidden = modeling_conv_bert.layer_norm(hidden)
         output_bias = tf.get_variable(
             "output_bias",
             shape=[self._bert_config.vocab_size],
@@ -248,13 +250,13 @@ class PretrainingModel(object):
           loss=loss, preds=preds)
 
   def _get_masked_lm_output(self, inputs, model):
-    """Masked language modeling_electra softmax layer."""
+    """Masked language modeling_conv_bert softmax layer."""
     masked_lm_weights = inputs.masked_lm_weights
     with tf.variable_scope("generator_predictions"):
       if self._config.uniform_generator:
         logits = tf.zeros(self._bert_config.vocab_size)
         logits_tiled = tf.zeros(
-            modeling_electra.get_shape_list(inputs.masked_lm_ids) +
+            modeling_conv_bert.get_shape_list(inputs.masked_lm_ids) +
             [self._bert_config.vocab_size])
         logits_tiled += tf.reshape(logits, [1, 1, self._bert_config.vocab_size])
         logits = logits_tiled
@@ -263,11 +265,11 @@ class PretrainingModel(object):
             model.get_sequence_output(), inputs.masked_lm_positions)
         hidden = tf.layers.dense(
             relevant_hidden,
-            units=modeling_electra.get_shape_list(model.get_embedding_table())[-1],
-            activation=modeling_electra.get_activation(self._bert_config.hidden_act),
-            kernel_initializer=modeling_electra.create_initializer(
+            units=modeling_conv_bert.get_shape_list(model.get_embedding_table())[-1],
+            activation=modeling_conv_bert.get_activation(self._bert_config.hidden_act),
+            kernel_initializer=modeling_conv_bert.create_initializer(
                 self._bert_config.initializer_range))
-        hidden = modeling_electra.layer_norm(hidden)
+        hidden = modeling_conv_bert.layer_norm(hidden)
         output_bias = tf.get_variable(
             "output_bias",
             shape=[self._bert_config.vocab_size],
@@ -301,8 +303,8 @@ class PretrainingModel(object):
       hidden = tf.layers.dense(
           discriminator.get_sequence_output(),
           units=self._bert_config.hidden_size,
-          activation=modeling_electra.get_activation(self._bert_config.hidden_act),
-          kernel_initializer=modeling_electra.create_initializer(
+          activation=modeling_conv_bert.get_activation(self._bert_config.hidden_act),
+          kernel_initializer=modeling_conv_bert.create_initializer(
               self._bert_config.initializer_range))
       logits = tf.squeeze(tf.layers.dense(hidden, units=1), -1)
       weights = tf.cast(inputs.input_mask, tf.float32)
@@ -348,7 +350,7 @@ class PretrainingModel(object):
     if bert_config is None:
       bert_config = self._bert_config
     with tf.variable_scope(tf.get_variable_scope(), reuse=reuse):
-      return modeling_electra.BertModel(
+      return modeling_conv_bert.BertModel(
           bert_config=bert_config,
           is_training=is_training,
           input_ids=inputs.input_ids,
@@ -362,7 +364,7 @@ class PretrainingModel(object):
 def get_generator_config(config,
                          bert_config):
   """Get model config for the generator network."""
-  gen_config = modeling_electra.BertConfig.from_dict(bert_config.to_dict())
+  gen_config = modeling_conv_bert.BertConfig.from_dict(bert_config.to_dict())
   gen_config.hidden_size = int(round(
       bert_config.hidden_size * config.generator_hidden_size))
   gen_config.num_hidden_layers = int(round(
